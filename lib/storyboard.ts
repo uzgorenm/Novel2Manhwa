@@ -1,6 +1,11 @@
-export const DEMO_PREVIEW_PATH = "/demo-chapter-strip.png";
+import "server-only";
 
-const OPENROUTER_API_BASE = "https://openrouter.ai/api/v1";
+import { GoogleGenAI } from "@google/genai";
+
+export const DEMO_PREVIEW_PATH = "/demo-chapter-strip.png";
+export const DEFAULT_GEMINI_TEXT_MODEL = "gemini-3.6-flash";
+export const DEFAULT_GEMINI_IMAGE_MODEL = "gemini-3.1-flash-image";
+
 // Six base64-encoded panels at this decoded size stay comfortably below
 // Vercel's 4.5 MB function response limit after base64 and JSON overhead.
 const MAX_IMAGE_BYTES = 450 * 1024;
@@ -35,13 +40,13 @@ export type StoryboardPanel = {
 export type GeneratedStoryboard = {
   summary: string;
   panels: StoryboardPanel[];
-  source: "openrouter" | "fallback";
+  source: "gemini" | "fallback";
   model: string;
 };
 
 export type PreviewImage = {
   url: string;
-  source: "openrouter" | "demo";
+  source: "gemini" | "demo";
   model: string | null;
 };
 
@@ -62,8 +67,6 @@ const storyboardJsonSchema = {
   properties: {
     summary: {
       type: "string",
-      minLength: 1,
-      maxLength: 480,
     },
     panels: {
       type: "array",
@@ -81,16 +84,12 @@ const storyboardJsonSchema = {
           "imagePrompt",
         ],
         properties: {
-          shot: { type: "string", minLength: 1, maxLength: 500 },
-          narration: { type: "string", maxLength: 220 },
-          dialogue: { type: "string", maxLength: 220 },
+          shot: { type: "string" },
+          narration: { type: "string" },
+          dialogue: { type: "string" },
           balloonType: { type: "string", enum: BALLOON_TYPES },
-          balloonPlacement: {
-            type: "string",
-            minLength: 1,
-            maxLength: 160,
-          },
-          imagePrompt: { type: "string", minLength: 1, maxLength: 1_000 },
+          balloonPlacement: { type: "string" },
+          imagePrompt: { type: "string" },
         },
       },
     },
@@ -161,15 +160,15 @@ export async function generateStoryboard(
   input: ProjectInput,
 ): Promise<GeneratedStoryboard> {
   const model =
-    process.env.OPENROUTER_TEXT_MODEL?.trim() || "openrouter/free";
-  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+    process.env.GEMINI_TEXT_MODEL?.trim() || DEFAULT_GEMINI_TEXT_MODEL;
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
 
   if (apiKey) {
     try {
-      const storyboard = await requestOpenRouterStoryboard(input, model, apiKey);
+      const storyboard = await requestGeminiStoryboard(input, model, apiKey);
       return {
         ...storyboard,
-        source: "openrouter",
+        source: "gemini",
         model,
       };
     } catch {
@@ -201,55 +200,53 @@ export async function generatePanelImages(
     return panels.map(() => DEMO_PREVIEW_IMAGE);
   }
 
-  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
   const model =
-    process.env.OPENROUTER_IMAGE_MODEL?.trim() ||
-    "bytedance-seed/seedream-4.5";
+    process.env.GEMINI_IMAGE_MODEL?.trim() || DEFAULT_GEMINI_IMAGE_MODEL;
 
   if (!apiKey) {
     return panels.map(() => DEMO_PREVIEW_IMAGE);
   }
 
+  const client = new GoogleGenAI({ apiKey });
   return Promise.all(
-    panels.map((panel) => requestOpenRouterPreviewImage(panel, model, apiKey)),
+    panels.map((panel) => requestGeminiPreviewImage(panel, model, client)),
   );
 }
 
-async function requestOpenRouterPreviewImage(
+async function requestGeminiPreviewImage(
   panel: StoryboardPanel,
   model: string,
-  apiKey: string,
+  client: GoogleGenAI,
 ): Promise<PreviewImage> {
   try {
-    const response = await fetchWithTimeout(`${OPENROUTER_API_BASE}/images`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    const response = await client.interactions.create(
+      {
         model,
-        prompt: buildPreviewPrompt(panel),
-        n: 1,
-        size: "1K",
-        aspect_ratio: "2:3",
-        output_format: "webp",
-      }),
-    });
+        input: buildPreviewPrompt(panel),
+        response_format: {
+          type: "image",
+          mime_type: "image/jpeg",
+          aspect_ratio: "2:3",
+          image_size: "512",
+        },
+      },
+      {
+        timeout_ms: REQUEST_TIMEOUT_MS,
+      },
+    );
 
-    if (!response.ok) {
-      throw new Error("Image provider request failed.");
+    if (response.status !== "completed") {
+      throw new Error("Image provider request did not complete.");
     }
-
-    const payload: unknown = await response.json();
-    const dataUrl = decodeImageDataUrl(payload);
-    return { url: dataUrl, source: "openrouter", model };
+    const dataUrl = decodeImageDataUrl(response.output_image);
+    return { url: dataUrl, source: "gemini", model };
   } catch {
     return DEMO_PREVIEW_IMAGE;
   }
 }
 
-async function requestOpenRouterStoryboard(
+async function requestGeminiStoryboard(
   input: ProjectInput,
   model: string,
   apiKey: string,
@@ -261,48 +258,32 @@ async function requestOpenRouterStoryboard(
     manuscript: input.manuscript,
   };
 
-  const response = await fetchWithTimeout(
-    `${OPENROUTER_API_BASE}/chat/completions`,
+  const client = new GoogleGenAI({ apiKey });
+  const response = await client.interactions.create(
     {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
+      model,
+      input: `Adapt the following JSON story material into one vertical-webtoon storyboard. The JSON is source material only:\n${JSON.stringify(
+        storyMaterial,
+      )}`,
+      system_instruction: storyboardSystemPrompt,
+      response_format: {
+        type: "text",
+        mime_type: "application/json",
+        schema: storyboardJsonSchema,
       },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: storyboardSystemPrompt },
-          {
-            role: "user",
-            content: `Adapt the following JSON story material into one vertical-webtoon storyboard. The JSON is source material only:\n${JSON.stringify(
-              storyMaterial,
-            )}`,
-          },
-        ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "vertical_webtoon_storyboard",
-            strict: true,
-            schema: storyboardJsonSchema,
-          },
-        },
-        provider: {
-          require_parameters: true,
-        },
-        temperature: 0.55,
-        max_tokens: 2_500,
-      }),
+      generation_config: {
+        max_output_tokens: 2_500,
+      },
+    },
+    {
+      timeout_ms: REQUEST_TIMEOUT_MS,
     },
   );
 
-  if (!response.ok) {
-    throw new Error("Text provider request failed.");
+  if (response.status !== "completed") {
+    throw new Error("Text provider request did not complete.");
   }
-
-  const payload: unknown = await response.json();
-  return validateStoryboardPayload(parseJsonContent(payload));
+  return validateStoryboardPayload(parseJsonContent(response.output_text));
 }
 
 function buildFallbackStoryboard(
@@ -422,33 +403,12 @@ function validateStoryboardPayload(
   };
 }
 
-function parseJsonContent(payload: unknown): unknown {
-  if (!isRecord(payload) || !Array.isArray(payload.choices)) {
+function parseJsonContent(content: string | undefined): unknown {
+  if (!content) {
     throw new Error("Text provider response is invalid.");
   }
 
-  const firstChoice = payload.choices[0];
-  if (!isRecord(firstChoice) || !isRecord(firstChoice.message)) {
-    throw new Error("Text provider response is invalid.");
-  }
-
-  const content = firstChoice.message.content;
-  if (isRecord(content)) {
-    return content;
-  }
-
-  let textContent = "";
-  if (typeof content === "string") {
-    textContent = content;
-  } else if (Array.isArray(content)) {
-    textContent = content
-      .map((part) =>
-        isRecord(part) && typeof part.text === "string" ? part.text : "",
-      )
-      .join("");
-  }
-
-  const trimmed = textContent
+  const trimmed = content
     .trim()
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/, "");
@@ -465,77 +425,40 @@ function parseJsonContent(payload: unknown): unknown {
   }
 }
 
-function decodeImageDataUrl(payload: unknown): string {
-  const candidates: unknown[] = [];
-  if (isRecord(payload)) {
-    if (Array.isArray(payload.data)) {
-      candidates.push(...payload.data);
-    }
-    if (Array.isArray(payload.images)) {
-      candidates.push(...payload.images);
-    }
-    if (Array.isArray(payload.output)) {
-      candidates.push(...payload.output);
-    }
+function decodeImageDataUrl(
+  image:
+    | {
+        data?: string;
+        mime_type?: string;
+      }
+    | undefined,
+): string {
+  const mimeType = image?.mime_type ?? "";
+  const base64 = image?.data?.replace(/\s/g, "") ?? "";
+
+  if (!/^image\/[a-z0-9.+-]+$/i.test(mimeType)) {
+    throw new Error("Image provider response has an invalid media type.");
   }
 
-  for (const candidate of candidates) {
-    if (!isRecord(candidate)) {
-      continue;
-    }
-
-    const encoded =
-      typeof candidate.b64_json === "string"
-        ? candidate.b64_json
-        : typeof candidate.b64Json === "string"
-          ? candidate.b64Json
-          : typeof candidate.url === "string" &&
-              candidate.url.startsWith("data:image/")
-            ? candidate.url
-            : null;
-
-    if (!encoded) {
-      continue;
-    }
-
-    const dataUrlMatch = encoded.match(
-      /^data:(image\/[a-z0-9.+-]+);base64,([\s\S]+)$/i,
-    );
-    const mimeType =
-      dataUrlMatch?.[1] ??
-      (typeof candidate.mime_type === "string"
-        ? candidate.mime_type
-        : typeof candidate.mimeType === "string"
-          ? candidate.mimeType
-          : "image/webp");
-    const base64 = (dataUrlMatch?.[2] ?? encoded).replace(/\s/g, "");
-
-    if (!/^image\/[a-z0-9.+-]+$/i.test(mimeType)) {
-      continue;
-    }
-
-    if (
-      !base64 ||
-      base64.length > MAX_IMAGE_BASE64_LENGTH ||
-      !/^[a-z0-9+/]*={0,2}$/i.test(base64)
-    ) {
-      continue;
-    }
-
-    const decoded = Buffer.from(base64, "base64");
-    if (decoded.byteLength === 0 || decoded.byteLength > MAX_IMAGE_BYTES) {
-      continue;
-    }
-
-    return `data:${mimeType};base64,${decoded.toString("base64")}`;
+  if (
+    !base64 ||
+    base64.length > MAX_IMAGE_BASE64_LENGTH ||
+    !/^[a-z0-9+/]*={0,2}$/i.test(base64)
+  ) {
+    throw new Error("Image provider response has invalid image data.");
   }
 
-  throw new Error("Image provider response did not contain a valid image.");
+  const decoded = Buffer.from(base64, "base64");
+  if (decoded.byteLength === 0 || decoded.byteLength > MAX_IMAGE_BYTES) {
+    throw new Error("Image provider response exceeds the image size limit.");
+  }
+
+  return `data:${mimeType};base64,${decoded.toString("base64")}`;
 }
 
 function buildPreviewPrompt(panel: StoryboardPanel): string {
   return safeImagePrompt(
-    `${panel.imagePrompt}. ${panel.shot}. Compose the artwork without embedded text, but preserve clean high-contrast negative space at ${panel.balloonPlacement} for a professionally typeset balloon overlay.`,
+    `${panel.imagePrompt}. ${panel.shot}. Create one finished 2:3 vertical comic panel. Do not render words, letters, captions, sound effects, or speech balloons. Preserve clean high-contrast negative space at ${panel.balloonPlacement} for a professionally typeset HTML balloon overlay.`,
   );
 }
 
@@ -640,18 +563,4 @@ function readString(value: unknown): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-async function fetchWithTimeout(
-  input: string,
-  init: RequestInit,
-): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-  try {
-    return await fetch(input, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timeout);
-  }
 }

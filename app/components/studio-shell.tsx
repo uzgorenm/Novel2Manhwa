@@ -249,7 +249,7 @@ export function StudioShell({
   );
   const liveGeneratedPanels = generatedPanels.filter(
     (panel) =>
-      panel.imageSource === "openrouter" &&
+      panel.imageSource === "gemini" &&
       panel.imageUrl?.startsWith("data:image/"),
   );
 

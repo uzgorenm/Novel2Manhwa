@@ -6,9 +6,9 @@ dialogue and narration, reserves readable balloon space, and returns a
 scroll-ready preview.
 
 The repository is a production-oriented Next.js application with Auth0 login,
-Stripe subscriptions, Neon Postgres persistence, OpenRouter generation, and
-Vercel hosting. Auth0, Neon, OpenRouter, and Vercel are provisioned and managed
-through [Stripe Projects](https://projects.dev/).
+Stripe subscriptions, Neon Postgres persistence, Gemini generation, and Vercel
+hosting. Service credentials and deployment configuration are managed through
+[Stripe Projects](https://projects.dev/).
 
 ## What is included
 
@@ -31,7 +31,7 @@ flowchart LR
   UI --> Auth["Auth0"]
   UI --> API["Protected APIs"]
   API --> Neon["Neon Postgres"]
-  API --> Models["OpenRouter"]
+  API --> Models["Google Gemini"]
   API --> Stripe["Stripe Checkout + Billing"]
   Stripe --> Webhook["Signed webhook"]
   Webhook --> API
@@ -101,6 +101,12 @@ requested concurrently, preserve their reading order, and are capped at 450 KiB
 each so the aggregate JSON remains within Vercel’s function response budget.
 Generated image data is response-scoped; provision object storage before
 retaining full generated chapters.
+
+Gemini uses the official `@google/genai` server SDK. `GEMINI_API_KEY` is read
+only by protected server routes and must never use a `NEXT_PUBLIC_` prefix. The
+defaults are `gemini-3.6-flash` for structured storyboards and
+`gemini-3.1-flash-image` for 2:3 panel artwork; override them with
+`GEMINI_TEXT_MODEL` and `GEMINI_IMAGE_MODEL`.
 
 ## Billing
 

@@ -18,6 +18,8 @@ import {
 } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import {
+  DEFAULT_GEMINI_IMAGE_MODEL,
+  DEFAULT_GEMINI_TEXT_MODEL,
   DEMO_PREVIEW_PATH,
   generatePanelImages,
   generateStoryboard,
@@ -65,10 +67,11 @@ export async function POST(request: Request) {
   }
 
   const textModel =
-    process.env.OPENROUTER_TEXT_MODEL?.trim() || "openrouter/free";
+    process.env.GEMINI_TEXT_MODEL?.trim() || DEFAULT_GEMINI_TEXT_MODEL;
   const imageModel =
-    process.env.OPENROUTER_IMAGE_MODEL?.trim() ||
-    "bytedance-seed/seedream-4.5";
+    process.env.GEMINI_IMAGE_MODEL?.trim() || DEFAULT_GEMINI_IMAGE_MODEL;
+  const liveImageGenerationEnabled =
+    process.env.ENABLE_LIVE_IMAGE_GENERATION === "true";
 
   let db: ReturnType<typeof getDb> | undefined;
   let projectId: string | undefined;
@@ -225,10 +228,7 @@ export async function POST(request: Request) {
         userId: ownerId,
         status: "processing",
         textModel,
-        imageModel:
-          process.env.ENABLE_LIVE_IMAGE_GENERATION === "true"
-            ? imageModel
-            : null,
+        imageModel: liveImageGenerationEnabled ? imageModel : null,
         idempotencyKey,
         startedAt,
       })
@@ -239,6 +239,13 @@ export async function POST(request: Request) {
 
     const storyboard = await generateStoryboard(parsed.value);
     const previews = await generatePanelImages(storyboard.panels);
+    if (
+      liveImageGenerationEnabled &&
+      previews.length > 0 &&
+      previews.every((preview) => preview.source === "demo")
+    ) {
+      throw new Error("Every live panel image request fell back to the demo.");
+    }
 
     const persistedPanels = await db
       .insert(panels)
@@ -294,24 +301,24 @@ export async function POST(request: Request) {
           source: storyboard.source,
           textModel: storyboard.model,
           imageModel:
-            previews.find((preview) => preview.source === "openrouter")
+            previews.find((preview) => preview.source === "gemini")
               ?.model ?? null,
         },
         panels: persistedPanels.map((panel, index) => ({
           ...panel,
           imageUrl:
-            previews[index]?.source === "openrouter"
+            previews[index]?.source === "gemini"
               ? previews[index].url
               : null,
           imageSource: previews[index]?.source ?? "demo",
         })),
         preview: {
           generatedPanelCount: previews.filter(
-            (preview) => preview.source === "openrouter",
+            (preview) => preview.source === "gemini",
           ).length,
           source:
-            previews.some((preview) => preview.source === "openrouter")
-              ? "openrouter"
+            previews.some((preview) => preview.source === "gemini")
+              ? "gemini"
               : "demo",
           persisted: false,
         },

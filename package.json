@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@auth0/nextjs-auth0": "^4.26.0",
+    "@google/genai": "^2.15.0",
     "@neondatabase/serverless": "^1.0.2",
     "drizzle-orm": "0.45.2",
     "next": "^16.2.12",

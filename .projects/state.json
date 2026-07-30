@@ -71,9 +71,6 @@
           "resourceName": "neon-plan"
         },
         {
-          "resourceName": "openrouter-plan"
-        },
-        {
           "resourceName": "vercel-plan"
         }
       ],
@@ -87,16 +84,20 @@
           "envKey": "AUTH0_SECRET"
         },
         {
+          "variableName": "gemini-api-key",
+          "envKey": "GEMINI_API_KEY"
+        },
+        {
+          "variableName": "gemini-image-model",
+          "envKey": "GEMINI_IMAGE_MODEL"
+        },
+        {
+          "variableName": "gemini-text-model",
+          "envKey": "GEMINI_TEXT_MODEL"
+        },
+        {
           "variableName": "live-image-generation",
           "envKey": "ENABLE_LIVE_IMAGE_GENERATION"
-        },
-        {
-          "variableName": "openrouter-image-model",
-          "envKey": "OPENROUTER_IMAGE_MODEL"
-        },
-        {
-          "variableName": "openrouter-text-model",
-          "envKey": "OPENROUTER_TEXT_MODEL"
         },
         {
           "variableName": "stripe-portal-configuration",
@@ -125,6 +126,18 @@
     "auth0-session-secret": {
       "name": "auth0-session-secret",
       "backendId": "fprjvar_61V8OCGHiu2vSvpUw16V8O9V7fSQtUaeml4Xbu9iS7Q0"
+    },
+    "gemini-api-key": {
+      "name": "gemini-api-key",
+      "backendId": "fprjvar_61V8PEq2ooDtK9lMn16V8O9V7fSQtUaeml4Xbu9iS9RY"
+    },
+    "gemini-image-model": {
+      "name": "gemini-image-model",
+      "backendId": "fprjvar_61V8PEtqAWLYLQVNP16V8O9V7fSQtUaeml4Xbu9iS1AW"
+    },
+    "gemini-text-model": {
+      "name": "gemini-text-model",
+      "backendId": "fprjvar_61V8PEra7NadXtd9Q16V8O9V7fSQtUaeml4Xbu9iSRqq"
     },
     "live-image-generation": {
       "name": "live-image-generation",

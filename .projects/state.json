@@ -1,0 +1,158 @@
+{
+  "version": 1,
+  "providers": {
+    "auth0": {
+      "name": "Auth0"
+    },
+    "neon": {
+      "name": "Neon"
+    },
+    "openrouter": {
+      "name": "OpenRouter"
+    },
+    "vercel": {
+      "name": "Vercel"
+    }
+  },
+  "resources": {
+    "auth0": {
+      "name": "auth0",
+      "providerName": "Auth0",
+      "serviceId": "client"
+    },
+    "auth0-plan": {
+      "name": "auth0-plan",
+      "providerName": "Auth0",
+      "serviceId": "free"
+    },
+    "database": {
+      "name": "database",
+      "providerName": "Neon",
+      "serviceId": "postgres"
+    },
+    "hosting": {
+      "name": "hosting",
+      "providerName": "Vercel",
+      "serviceId": "project"
+    },
+    "neon-plan": {
+      "name": "neon-plan",
+      "providerName": "Neon",
+      "serviceId": "free"
+    },
+    "openrouter-plan": {
+      "name": "openrouter-plan",
+      "providerName": "OpenRouter",
+      "serviceId": "free"
+    },
+    "vercel-plan": {
+      "name": "vercel-plan",
+      "providerName": "Vercel",
+      "serviceId": "hobby"
+    }
+  },
+  "environments": {
+    "default": {
+      "output": ".env",
+      "resources": [
+        {
+          "resourceName": "auth0"
+        },
+        {
+          "resourceName": "auth0-plan"
+        },
+        {
+          "resourceName": "database"
+        },
+        {
+          "resourceName": "hosting"
+        },
+        {
+          "resourceName": "neon-plan"
+        },
+        {
+          "resourceName": "openrouter-plan"
+        },
+        {
+          "resourceName": "vercel-plan"
+        }
+      ],
+      "variables": [
+        {
+          "variableName": "app-base-url",
+          "envKey": "APP_BASE_URL"
+        },
+        {
+          "variableName": "auth0-session-secret",
+          "envKey": "AUTH0_SECRET"
+        },
+        {
+          "variableName": "live-image-generation",
+          "envKey": "ENABLE_LIVE_IMAGE_GENERATION"
+        },
+        {
+          "variableName": "openrouter-image-model",
+          "envKey": "OPENROUTER_IMAGE_MODEL"
+        },
+        {
+          "variableName": "openrouter-text-model",
+          "envKey": "OPENROUTER_TEXT_MODEL"
+        },
+        {
+          "variableName": "stripe-portal-configuration",
+          "envKey": "STRIPE_PORTAL_CONFIGURATION_ID"
+        },
+        {
+          "variableName": "stripe-starter-price",
+          "envKey": "STRIPE_STARTER_PRICE_ID"
+        },
+        {
+          "variableName": "stripe-test-secret-key",
+          "envKey": "STRIPE_SECRET_KEY"
+        },
+        {
+          "variableName": "stripe-webhook-secret",
+          "envKey": "STRIPE_WEBHOOK_SECRET"
+        }
+      ]
+    }
+  },
+  "variables": {
+    "app-base-url": {
+      "name": "app-base-url",
+      "backendId": "fprjvar_61V8OCIqnR0vgbLn616V8O9V7fSQtUaeml4Xbu9iSPsO"
+    },
+    "auth0-session-secret": {
+      "name": "auth0-session-secret",
+      "backendId": "fprjvar_61V8OCGHiu2vSvpUw16V8O9V7fSQtUaeml4Xbu9iS7Q0"
+    },
+    "live-image-generation": {
+      "name": "live-image-generation",
+      "backendId": "fprjvar_61V8OVEhzmJZgQwYZ16V8O9V7fSQtUaeml4Xbu9iSSK0"
+    },
+    "openrouter-image-model": {
+      "name": "openrouter-image-model",
+      "backendId": "fprjvar_61V8OVCCwiD3fK7R716V8O9V7fSQtUaeml4Xbu9iST7Y"
+    },
+    "openrouter-text-model": {
+      "name": "openrouter-text-model",
+      "backendId": "fprjvar_61V8OVBCbqR95UjPz16V8O9V7fSQtUaeml4Xbu9iSSzQ"
+    },
+    "stripe-portal-configuration": {
+      "name": "stripe-portal-configuration",
+      "backendId": "fprjvar_61V8Oq5EntMPTKymY16V8O9V7fSQtUaeml4Xbu9iS5Ca"
+    },
+    "stripe-starter-price": {
+      "name": "stripe-starter-price",
+      "backendId": "fprjvar_61V8OErZoCcYxW98Q16V8O9V7fSQtUaeml4Xbu9iS4nI"
+    },
+    "stripe-test-secret-key": {
+      "name": "stripe-test-secret-key",
+      "backendId": "fprjvar_61V8OW9b7btfKAvga16V8O9V7fSQtUaeml4Xbu9iS0QC"
+    },
+    "stripe-webhook-secret": {
+      "name": "stripe-webhook-secret",
+      "backendId": "fprjvar_61V8OeksW6TutQH5Y16V8O9V7fSQtUaeml4Xbu9iS4uO"
+    }
+  }
+}

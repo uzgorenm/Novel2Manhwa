@@ -13,9 +13,11 @@ const REQUIRED_CONFIGURATION = [
 ] as const;
 
 export function GET() {
-  const configured = REQUIRED_CONFIGURATION.every((name) =>
-    Boolean(process.env[name]?.trim()),
-  );
+  const configured =
+    process.env.ENABLE_LIVE_IMAGE_GENERATION === "true" &&
+    REQUIRED_CONFIGURATION.every((name) =>
+      Boolean(process.env[name]?.trim()),
+    );
 
   return Response.json(
     { ok: configured },

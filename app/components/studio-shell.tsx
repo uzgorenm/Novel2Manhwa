@@ -1,7 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { ChangeEvent, useMemo, useState } from "react";
+import { ChangeEvent, useMemo, useRef, useState } from "react";
+
+import { SiteHeader } from "@/app/components/site-header";
 
 type StudioShellProps = {
   user?: {
@@ -9,11 +11,16 @@ type StudioShellProps = {
     email?: string | null;
     picture?: string | null;
   } | null;
-  authConfigured?: boolean;
 };
 
 type SourceMode = "upload" | "paste";
 type RequestState = "idle" | "loading" | "success" | "error";
+type ReferencePanelState = {
+  dataUrl: string;
+  name: string;
+  width: number;
+  height: number;
+};
 type GeneratedPanel = {
   id?: string;
   sequence?: number;
@@ -21,32 +28,17 @@ type GeneratedPanel = {
   dialogue?: string;
   balloonType?: string;
   imageUrl?: string | null;
-  imageSource?: string;
   letteringMode?: "embedded" | "overlay";
 };
 
-const SAMPLE_MANUSCRIPT = `The lake had been silent for three hundred years.
-
-Kael stood at the end of the drowned road, moonlight silvering the old stones beneath the water. Somewhere below, past the pillars and the weeds, a bell began to ring.
-
-“The bell was never under the lake,” he whispered.
-
-Mira tightened her grip on the lantern. “Then why can I hear it?”`;
-
-const PROGRESS_STAGES = [
-  { label: "Script", value: 100, status: "Complete" },
-  { label: "Storyboard", value: 72, status: "Rendering" },
-  { label: "Ink & color", value: 0, status: "Queued" },
-];
-
-function getInitials(user: StudioShellProps["user"]) {
-  const source = user?.name || user?.email || "PF";
-  const chunks = source.trim().split(/\s+|@/).filter(Boolean);
-  return chunks
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-}
+const REFERENCE_UPLOAD_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+const MAX_REFERENCE_UPLOAD_BYTES = 5 * 1024 * 1024;
+const MAX_REFERENCE_REQUEST_BYTES = 2 * 1024 * 1024;
+const REFERENCE_LONG_EDGE = 1024;
 
 async function readResponse(response: Response) {
   try {
@@ -56,18 +48,92 @@ async function readResponse(response: Response) {
   }
 }
 
-function bubbleCopy(value: string | undefined, fallback: string) {
-  const copy = value?.trim() || fallback;
-  return copy.length > 92 ? `${copy.slice(0, 89).trimEnd()}…` : copy;
+function readBlobAsDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () =>
+      typeof reader.result === "string"
+        ? resolve(reader.result)
+        : reject(new Error("The reference panel could not be read."));
+    reader.onerror = () =>
+      reject(new Error("The reference panel could not be read."));
+    reader.readAsDataURL(blob);
+  });
 }
 
-export function StudioShell({
-  user = null,
-  authConfigured = true,
-}: StudioShellProps) {
+function canvasToJpeg(
+  canvas: HTMLCanvasElement,
+  quality: number,
+): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) =>
+        blob
+          ? resolve(blob)
+          : reject(new Error("The reference panel could not be compressed.")),
+      "image/jpeg",
+      quality,
+    );
+  });
+}
+
+async function prepareReferenceUpload(
+  file: File,
+): Promise<ReferencePanelState> {
+  if (!REFERENCE_UPLOAD_TYPES.has(file.type)) {
+    throw new Error("Choose a JPEG, PNG, or WebP reference panel.");
+  }
+  if (file.size > MAX_REFERENCE_UPLOAD_BYTES) {
+    throw new Error("Reference panels can be up to 5 MB.");
+  }
+
+  const bitmap = await createImageBitmap(file);
+  try {
+    const scale = Math.min(
+      1,
+      REFERENCE_LONG_EDGE / Math.max(bitmap.width, bitmap.height),
+    );
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("The reference panel could not be prepared.");
+    }
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(bitmap, 0, 0, width, height);
+
+    let compressed = await canvasToJpeg(canvas, 0.82);
+    if (compressed.size > MAX_REFERENCE_REQUEST_BYTES) {
+      compressed = await canvasToJpeg(canvas, 0.65);
+    }
+    if (compressed.size > MAX_REFERENCE_REQUEST_BYTES) {
+      throw new Error("The reference panel remains too large after compression.");
+    }
+
+    return {
+      dataUrl: await readBlobAsDataUrl(compressed),
+      name: file.name,
+      width,
+      height,
+    };
+  } finally {
+    bitmap.close();
+  }
+}
+
+export function StudioShell({ user = null }: StudioShellProps) {
+  const referenceInputRef = useRef<HTMLInputElement>(null);
   const [sourceMode, setSourceMode] = useState<SourceMode>("paste");
-  const [manuscript, setManuscript] = useState(SAMPLE_MANUSCRIPT);
+  const [title, setTitle] = useState("");
+  const [chapterTitle, setChapterTitle] = useState("");
+  const [manuscript, setManuscript] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
+  const [referencePanel, setReferencePanel] =
+    useState<ReferencePanelState | null>(null);
   const [generatedPanels, setGeneratedPanels] = useState<GeneratedPanel[]>([]);
   const [creditsRemaining, setCreditsRemaining] = useState<number | null>(null);
   const [stylePreset, setStylePreset] = useState("Cinematic webtoon");
@@ -77,7 +143,7 @@ export function StudioShell({
     "idle" | "checkout" | "portal"
   >("idle");
   const [message, setMessage] = useState(
-    "Chapter settings are ready. Review the source, then generate.",
+    "Add your chapter details and manuscript to begin.",
   );
 
   const wordCount = useMemo(() => {
@@ -85,13 +151,22 @@ export function StudioShell({
     return count.toLocaleString();
   }, [manuscript]);
 
+  function resetGeneratedOutput(
+    nextMessage = "Add your chapter details and manuscript to begin.",
+  ) {
+    setGeneratedPanels([]);
+    setGenerationState("idle");
+    setMessage(nextMessage);
+  }
+
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!/\.(txt|md|rtf)$/i.test(file.name)) {
+    if (!/\.(txt|md)$/i.test(file.name)) {
+      setGeneratedPanels([]);
       setGenerationState("error");
-      setMessage("Choose a TXT, Markdown, or RTF manuscript.");
+      setMessage("Choose a TXT or Markdown manuscript.");
       event.target.value = "";
       return;
     }
@@ -103,15 +178,15 @@ export function StudioShell({
       }
       if (text.length > 60_000) {
         throw new Error(
-          "This demo accepts up to 60,000 characters per chapter.",
+          "Chapters can contain up to 60,000 characters.",
         );
       }
 
       setManuscript(text);
       setFileName(file.name);
-      setMessage(`${file.name} is loaded and ready to adapt.`);
-      setGenerationState("idle");
+      resetGeneratedOutput(`${file.name} is loaded and ready to adapt.`);
     } catch (error) {
+      setGeneratedPanels([]);
       setGenerationState("error");
       setMessage(
         error instanceof Error
@@ -121,9 +196,52 @@ export function StudioShell({
     }
   }
 
+  async function handleReferencePanelChange(
+    event: ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const prepared = await prepareReferenceUpload(file);
+      setReferencePanel(prepared);
+      resetGeneratedOutput(
+        `${file.name} will guide character and visual continuity for this chapter.`,
+      );
+    } catch (error) {
+      setReferencePanel(null);
+      setGeneratedPanels([]);
+      setGenerationState("error");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "The reference panel could not be prepared.",
+      );
+      event.target.value = "";
+    }
+  }
+
+  function removeReferencePanel() {
+    setReferencePanel(null);
+    if (referenceInputRef.current) {
+      referenceInputRef.current.value = "";
+    }
+    resetGeneratedOutput("Reference panel removed.");
+  }
+
   async function handleGenerate() {
+    const trimmedTitle = title.trim();
+    const trimmedChapterTitle = chapterTitle.trim();
+    const trimmedManuscript = manuscript.trim();
+
+    if (!trimmedTitle || !trimmedChapterTitle || !trimmedManuscript) {
+      setGenerationState("error");
+      setMessage("Add a story title, chapter title, and manuscript first.");
+      return;
+    }
+
     setGenerationState("loading");
-    setMessage("Breaking Chapter 12 into cinematic beats…");
+    setMessage(`Turning ${trimmedChapterTitle} into cinematic panels…`);
 
     try {
       const requestKey =
@@ -137,10 +255,11 @@ export function StudioShell({
           "Idempotency-Key": requestKey,
         },
         body: JSON.stringify({
-          title: "The Moon’s Exiled Heir",
-          chapterTitle: "Chapter 12 · The Drowned Bell",
-          manuscript,
+          title: trimmedTitle,
+          chapterTitle: trimmedChapterTitle,
+          manuscript: trimmedManuscript,
           stylePreset,
+          referencePanel: referencePanel?.dataUrl ?? null,
         }),
       });
       const data = await readResponse(response);
@@ -169,7 +288,7 @@ export function StudioShell({
       setGenerationState("success");
       setMessage(
         (data.summary as string) ||
-          "Chapter 12 is ready. The storyboard has been saved to your project.",
+          `${trimmedChapterTitle} is ready to review.`,
       );
     } catch (error) {
       setGenerationState("error");
@@ -234,142 +353,85 @@ export function StudioShell({
       : generationState === "success"
         ? "status-success"
         : "";
-  const previewImageUrl =
-    generatedPanels.find((panel) => panel.imageUrl)?.imageUrl ||
-    "/demo-chapter-strip.png";
-  const generatedCopy = generatedPanels
-    .flatMap((panel) => [panel.dialogue, panel.narration])
-    .filter((copy): copy is string => Boolean(copy?.trim()));
-  const firstBubble = bubbleCopy(
-    generatedCopy[0],
-    "The bell was never under the lake.",
-  );
-  const secondBubble = bubbleCopy(
-    generatedCopy[1],
-    "Then why can I hear it?",
-  );
   const liveGeneratedPanels = generatedPanels.filter(
     (panel) =>
-      panel.imageSource === "gemini" &&
       panel.letteringMode === "embedded" &&
       panel.imageUrl?.startsWith("data:image/"),
   );
+  const previewStatus =
+    generationState === "loading"
+      ? "Generating"
+      : generationState === "success"
+        ? "Ready"
+        : generationState === "error"
+          ? "Needs attention"
+          : "Ready to generate";
 
   return (
     <div className="studio-shell">
-      <aside className="project-rail" aria-label="Project navigation">
-        <div className="rail-brand">
-          <span className="brand-mark" aria-hidden="true">
-            PF
-          </span>
-          <span className="brand-copy">
-            <strong>PANELFORGE</strong>
-            <small>From prose to panels.</small>
-          </span>
-        </div>
-
-        <nav className="rail-nav" aria-label="Workspace">
-          <a className="rail-link rail-link-active" href="#studio">
-            <span aria-hidden="true">✦</span>
-            <span>Studio</span>
-          </a>
-          <a className="rail-link" href="#storyboard">
-            <span aria-hidden="true">▦</span>
-            <span>Storyboards</span>
-          </a>
-          <a className="rail-link" href="#library">
-            <span aria-hidden="true">◫</span>
-            <span>Character vault</span>
-          </a>
-        </nav>
-
-        <div className="rail-section">
-          <div className="rail-section-heading">
-            <span>Projects</span>
-            <button type="button" aria-label="Create a new project">
-              +
-            </button>
-          </div>
-          <button className="project-item project-item-active" type="button">
-            <span className="project-cover" aria-hidden="true">
-              12
-            </span>
-            <span>
-              <strong>The Moon’s Exiled Heir</strong>
-              <small>Chapter 12 · In progress</small>
-            </span>
-          </button>
-          <button className="project-item" type="button">
-            <span className="project-cover project-cover-alt" aria-hidden="true">
-              08
-            </span>
-            <span>
-              <strong>Orchid &amp; Ash</strong>
-              <small>Chapter 8 · Draft</small>
-            </span>
-          </button>
-        </div>
-
-        <div className="rail-footer">
-          <div className="rail-user">
-            <span className="user-avatar" aria-hidden="true">
-              {getInitials(user)}
-            </span>
-            <span className="user-copy">
-              <strong>{user?.name || user?.email || "Guest creator"}</strong>
-              {user ? (
-                <a href="/auth/logout">Sign out</a>
-              ) : (
-                <a href="/auth/login">Sign in to save</a>
-              )}
-            </span>
-          </div>
-        </div>
-      </aside>
+      <SiteHeader user={user} />
 
       <main className="studio-main" id="studio">
         <header className="studio-header">
           <div>
-            <div className="header-kicker">
-              <span className="live-dot" aria-hidden="true" />
-              Project workspace
-            </div>
-            <h1>The Moon’s Exiled Heir</h1>
-          </div>
-          <div className="header-actions">
-            {!user && (
-              <>
-                <span className="demo-mode">
-                  {authConfigured ? "Guest mode" : "Demo mode"}
-                </span>
-                <a className="header-sign-in" href="/auth/login">
-                  Sign in
-                </a>
-              </>
-            )}
-            <span className="chapter-pill">Chapter 12</span>
-            <button
-              className="icon-button"
-              type="button"
-              aria-label="Open project options"
-            >
-              ···
-            </button>
+            <div className="header-kicker">CREATE A CHAPTER</div>
+            <h1>Turn your prose into a finished vertical comic</h1>
+            <p>
+              Add your chapter, choose a visual direction, and generate
+              lettered panels ready to read.
+            </p>
           </div>
         </header>
 
         <div className="studio-content">
-          <section className="source-column" aria-label="Chapter source">
+          <section
+            className="source-column"
+            id="source"
+            aria-label="Chapter source"
+          >
             <div className="panel-heading">
               <div>
-                <span className="step-label">01 · SOURCE</span>
-                <h2>Build from your manuscript</h2>
+                <span className="step-label">01 · CHAPTER</span>
+                <h2>Add your manuscript</h2>
                 <p>
                   We preserve dialogue, pacing, and character intent while
                   adapting prose for vertical storytelling.
                 </p>
               </div>
               <span className="word-badge">{wordCount} words</span>
+            </div>
+
+            <div className="chapter-details">
+              <label htmlFor="story-title">
+                Story title
+                <input
+                  id="story-title"
+                  type="text"
+                  value={title}
+                  maxLength={120}
+                  autoComplete="off"
+                  placeholder="e.g. The Moonlit Archive"
+                  onChange={(event) => {
+                    setTitle(event.target.value);
+                    resetGeneratedOutput();
+                  }}
+                />
+              </label>
+              <label htmlFor="chapter-title">
+                Chapter title
+                <input
+                  id="chapter-title"
+                  type="text"
+                  value={chapterTitle}
+                  maxLength={160}
+                  autoComplete="off"
+                  placeholder="e.g. Chapter 1 · The First Bell"
+                  onChange={(event) => {
+                    setChapterTitle(event.target.value);
+                    resetGeneratedOutput();
+                  }}
+                />
+              </label>
             </div>
 
             <div className="source-tabs" role="tablist" aria-label="Source type">
@@ -408,7 +470,7 @@ export function StudioShell({
                 className="visually-hidden"
                 id="manuscript-file"
                 type="file"
-                accept=".txt,.md,.rtf,text/plain,text/markdown"
+                accept=".txt,.md,text/plain,text/markdown"
                 onChange={handleFileChange}
               />
               <label className="upload-dropzone" htmlFor="manuscript-file">
@@ -419,7 +481,7 @@ export function StudioShell({
                 <span>
                   {fileName
                     ? "Choose another file"
-                    : "TXT, Markdown or RTF · up to 60,000 characters"}
+                    : "TXT or Markdown · up to 60,000 characters"}
                 </span>
                 <span className="file-cta">Browse files</span>
               </label>
@@ -436,16 +498,16 @@ export function StudioShell({
               <textarea
                 id="manuscript-text"
                 value={manuscript}
+                maxLength={60_000}
                 onChange={(event) => {
                   setManuscript(event.target.value);
-                  setGenerationState("idle");
+                  resetGeneratedOutput();
                 }}
                 rows={9}
                 placeholder="Paste the prose you want to turn into panels…"
               />
               <div className="textarea-meta">
-                <span>Dialogue detection on</span>
-                <span>Autosaved locally</span>
+                <span>{manuscript.length.toLocaleString()} / 60,000 characters</span>
               </div>
             </div>
 
@@ -461,7 +523,10 @@ export function StudioShell({
                 <select
                   id="style-preset"
                   value={stylePreset}
-                  onChange={(event) => setStylePreset(event.target.value)}
+                  onChange={(event) => {
+                    setStylePreset(event.target.value);
+                    resetGeneratedOutput();
+                  }}
                 >
                   <option>Cinematic webtoon</option>
                   <option>Romantic fantasy</option>
@@ -469,64 +534,114 @@ export function StudioShell({
                   <option>Painterly action</option>
                 </select>
               </div>
-              <div className="style-chips" aria-label="Style qualities">
-                <span>Moonlit palette</span>
-                <span>Expressive close-ups</span>
-                <span>Dynamic pacing</span>
+
+              <div className="reference-panel-field">
+                <div className="reference-panel-heading">
+                  <div>
+                    <strong>
+                      Continuity panel <span>Optional</span>
+                    </strong>
+                    <p>
+                      Attach one finished panel to carry its recurring
+                      character cues, palette, and rendering language into
+                      later novel chapters.
+                    </p>
+                  </div>
+                  {referencePanel && (
+                    <button type="button" onClick={removeReferencePanel}>
+                      Remove
+                    </button>
+                  )}
+                </div>
+
+                <input
+                  ref={referenceInputRef}
+                  className="visually-hidden"
+                  id="reference-panel"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handleReferencePanelChange}
+                />
+
+                {referencePanel ? (
+                  <div className="reference-panel-preview">
+                    <Image
+                      src={referencePanel.dataUrl}
+                      alt="Selected visual continuity panel"
+                      width={88}
+                      height={112}
+                      unoptimized
+                    />
+                    <div>
+                      <strong>{referencePanel.name}</strong>
+                      <span>
+                        {referencePanel.width} × {referencePanel.height} · ready
+                      </span>
+                      <label htmlFor="reference-panel">
+                        Choose another panel
+                      </label>
+                    </div>
+                  </div>
+                ) : (
+                  <label
+                    className="reference-panel-dropzone"
+                    htmlFor="reference-panel"
+                  >
+                    <span aria-hidden="true">＋</span>
+                    <div>
+                      <strong>Attach a reference panel</strong>
+                      <small>JPEG, PNG or WebP · up to 5 MB</small>
+                    </div>
+                  </label>
+                )}
+                <small className="reference-panel-note">
+                  The panel guides continuity only; new scenes use different
+                  poses, compositions, backgrounds, and lettering.
+                </small>
               </div>
             </div>
 
             <div className="generation-card">
               <div className="generation-card-top">
                 <div>
-                  <span className="step-label">03 · PRODUCTION</span>
-                  <h3>Chapter pipeline</h3>
+                  <span className="step-label">03 · GENERATE</span>
+                  <h3>Create your chapter</h3>
                 </div>
-                <span className="pipeline-eta">~6 min</span>
               </div>
+              <p className="generation-description">
+                Creates 3–6 illustrated, lettered panels from this chapter.
+              </p>
 
-              <div className="progress-list">
-                {PROGRESS_STAGES.map((stage) => (
-                  <div className="progress-row" key={stage.label}>
-                    <div className="progress-labels">
-                      <span>{stage.label}</span>
-                      <span>
-                        {stage.status === "Queued"
-                          ? stage.status
-                          : `${stage.value}%`}
-                      </span>
-                    </div>
-                    <div
-                      className={`progress-track ${
-                        stage.status === "Queued" ? "progress-queued" : ""
-                      }`}
-                      role="progressbar"
-                      aria-label={stage.label}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={stage.value}
-                    >
-                      <span style={{ width: `${stage.value}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <button
-                className="generate-button"
-                type="button"
-                disabled={
-                  generationState === "loading" || !manuscript.trim()
-                }
-                onClick={handleGenerate}
-              >
-                <span aria-hidden="true">
-                  {generationState === "loading" ? "◌" : "✦"}
-                </span>
-                {generationState === "loading"
-                  ? "Preparing chapter…"
-                  : "Generate chapter · 1 credit"}
-              </button>
+              {user ? (
+                <button
+                  className="generate-button"
+                  type="button"
+                  data-loading={
+                    generationState === "loading" ? "true" : undefined
+                  }
+                  disabled={
+                    generationState === "loading" ||
+                    !title.trim() ||
+                    !chapterTitle.trim() ||
+                    !manuscript.trim()
+                  }
+                  onClick={handleGenerate}
+                >
+                  <span aria-hidden="true">
+                    {generationState === "loading" ? "◌" : "✦"}
+                  </span>
+                  {generationState === "loading"
+                    ? "Generating chapter…"
+                    : "Generate chapter · 1 credit"}
+                </button>
+              ) : (
+                <a
+                  className="generate-button"
+                  href="/auth/login?returnTo=/studio"
+                >
+                  Sign in to generate
+                </a>
+              )}
               <p
                 className={`status-message ${statusTone}`}
                 role="status"
@@ -549,47 +664,54 @@ export function StudioShell({
                 </small>
               </div>
               <div className="plan-actions">
-                <button
-                  className="upgrade-button"
-                  type="button"
-                  disabled={billingState !== "idle"}
-                  onClick={() => handleBilling("checkout")}
-                >
-                  {billingState === "checkout" ? "Opening…" : "Upgrade"}
-                </button>
-                <button
-                  className="manage-button"
-                  type="button"
-                  disabled={billingState !== "idle"}
-                  onClick={() => handleBilling("portal")}
-                >
-                  Manage billing
-                </button>
+                {user ? (
+                  <>
+                    <button
+                      className="upgrade-button"
+                      type="button"
+                      disabled={billingState !== "idle"}
+                      onClick={() => handleBilling("checkout")}
+                    >
+                      {billingState === "checkout" ? "Opening…" : "Upgrade"}
+                    </button>
+                    <button
+                      className="manage-button"
+                      type="button"
+                      disabled={billingState !== "idle"}
+                      onClick={() => handleBilling("portal")}
+                    >
+                      Manage billing
+                    </button>
+                  </>
+                ) : (
+                  <a
+                    className="upgrade-button"
+                    href="/auth/login?returnTo=/studio"
+                  >
+                    Sign in to subscribe
+                  </a>
+                )}
               </div>
             </div>
           </section>
 
           <section
             className="preview-column"
-            id="storyboard"
-            aria-label="Live storyboard preview"
+            id="preview"
+            aria-label="Chapter preview"
           >
             <div className="preview-heading">
               <div>
-                <span className="step-label">LIVE STORYBOARD</span>
-                <h2>Chapter 12 · The Drowned Bell</h2>
+                <span className="step-label">PREVIEW</span>
+                <h2>{chapterTitle.trim() || "Your generated chapter"}</h2>
               </div>
               <div className="preview-state">
                 <span aria-hidden="true" />
-                {generationState === "success" ? "Ready" : "Rendering"}
+                {previewStatus}
               </div>
             </div>
 
             <div className="preview-workbench">
-              <div className="preview-toolbar">
-                <span>PAGE 01 / 08</span>
-                <span>72% storyboard</span>
-              </div>
               <div className="storyboard-viewport">
                 <figure
                   className={`storyboard-strip ${
@@ -630,57 +752,26 @@ export function StudioShell({
                       );
                     })
                   ) : (
-                    <>
-                      <Image
-                        src={previewImageUrl}
-                        alt="Moonlit fantasy storyboard showing an exiled heir at a flooded road, a submerged bell, and a dramatic character close-up"
-                        width={1024}
-                        height={1536}
-                        priority
-                        unoptimized={previewImageUrl.startsWith("data:")}
-                      />
-                      <div className="speech-bubble bubble-one">
-                        {firstBubble}
-                      </div>
-                      <div className="speech-bubble bubble-two">
-                        {secondBubble}
-                      </div>
-                    </>
+                    <div className="preview-empty">
+                      <span aria-hidden="true">✦</span>
+                      <strong>
+                        {generationState === "loading"
+                          ? "Creating your panels…"
+                          : generationState === "success"
+                            ? "No panel artwork was returned"
+                            : "Your chapter will appear here"}
+                      </strong>
+                      <p>
+                        {generationState === "loading"
+                          ? "Illustration and lettering are generated together."
+                          : generationState === "success"
+                            ? "Try generating the chapter again."
+                            : "Complete the chapter details, then generate when you’re ready."}
+                      </p>
+                    </div>
                   )}
-                  <figcaption>
-                    {liveGeneratedPanels.length > 0
-                      ? `${liveGeneratedPanels.length} generated panels with image-rendered speech balloons and lettering`
-                      : "AI storyboard preview with editable dialogue overlays"}
-                  </figcaption>
                 </figure>
               </div>
-              <div className="preview-footer">
-                <span>
-                  <i aria-hidden="true">A</i>{" "}
-                  {liveGeneratedPanels.length > 0
-                    ? "Lettering rendered into the artwork"
-                    : "Dialogue remains editable"}
-                </span>
-                <button type="button">Open editor <span aria-hidden="true">↗</span></button>
-              </div>
-            </div>
-
-            <div className="scene-strip" aria-label="Storyboard scenes">
-              <button className="scene-card scene-card-active" type="button">
-                <span>01</span>
-                <strong>The flooded road</strong>
-                <small>3 panels · 00:18</small>
-              </button>
-              <button className="scene-card" type="button">
-                <span>02</span>
-                <strong>Beneath the lake</strong>
-                <small>4 panels · 00:24</small>
-              </button>
-              <button className="scene-card" type="button">
-                <span>03</span>
-                <strong>The heir remembers</strong>
-                <small>5 panels · queued</small>
-              </button>
             </div>
           </section>
         </div>

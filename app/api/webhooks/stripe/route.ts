@@ -1,4 +1,4 @@
-import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 
@@ -69,21 +69,26 @@ async function persistSubscription(
   subscription: Stripe.Subscription,
   userId: string,
   eventCreatedAt: Date,
+  starterPriceId: string,
 ) {
   const customerId = stripeObjectId(subscription.customer);
-  const firstItem = subscription.items.data[0];
+  const starterItem = subscription.items.data.find(
+    (item) => item.price.id === starterPriceId,
+  );
+  const periodItem = starterItem ?? subscription.items.data[0];
 
-  if (!customerId || !firstItem) {
+  if (!customerId || !periodItem) {
     throw new Error("The Stripe subscription is missing required ownership.");
   }
 
   const currentPeriodStart = stripeTimestamp(
-    firstItem.current_period_start,
+    periodItem.current_period_start,
   );
-  const currentPeriodEnd = stripeTimestamp(firstItem.current_period_end);
-  const credits = ENTITLED_SUBSCRIPTION_STATUSES.has(subscription.status)
-    ? CHAPTER_CREDITS_PER_PERIOD
-    : 0;
+  const currentPeriodEnd = stripeTimestamp(periodItem.current_period_end);
+  const entitled =
+    Boolean(starterItem) &&
+    ENTITLED_SUBSCRIPTION_STATUSES.has(subscription.status);
+  const credits = entitled ? CHAPTER_CREDITS_PER_PERIOD : 0;
   const now = new Date();
 
   await getDb()
@@ -92,7 +97,7 @@ async function persistSubscription(
       userId,
       stripeCustomerId: customerId,
       stripeSubscriptionId: subscription.id,
-      stripePriceId: firstItem.price.id,
+      stripePriceId: starterItem?.price.id ?? periodItem.price.id,
       status: subscription.status,
       chapterCreditsRemaining: credits,
       cancelAtPeriodEnd: subscription.cancel_at_period_end,
@@ -105,14 +110,16 @@ async function persistSubscription(
       set: {
         userId,
         stripeCustomerId: customerId,
-        stripePriceId: firstItem.price.id,
+        stripePriceId: starterItem?.price.id ?? periodItem.price.id,
         status: subscription.status,
         chapterCreditsRemaining: sql<number>`
           case
-            when ${subscription.status} in ('active', 'trialing') then
+            when ${entitled} then
               case
                 when ${subscriptions.currentPeriodStart}
                   is distinct from ${currentPeriodStart}
+                  or ${subscriptions.stripePriceId}
+                    is distinct from ${starterPriceId}
                 then ${CHAPTER_CREDITS_PER_PERIOD}
                 else ${subscriptions.chapterCreditsRemaining}
               end
@@ -127,7 +134,7 @@ async function persistSubscription(
       },
       setWhere: or(
         isNull(subscriptions.lastStripeEventCreatedAt),
-        lte(subscriptions.lastStripeEventCreatedAt, eventCreatedAt),
+        lt(subscriptions.lastStripeEventCreatedAt, eventCreatedAt),
       ),
     });
 }
@@ -210,6 +217,7 @@ async function processCheckoutCompleted(
   checkoutSession: Stripe.Checkout.Session,
   eventCreatedAt: Date,
   stripe: Stripe,
+  starterPriceId: string,
 ) {
   const customerId = stripeObjectId(checkoutSession.customer);
   const auth0UserId =
@@ -242,34 +250,52 @@ async function processCheckoutCompleted(
     throw new Error("The Checkout Session has no subscription.");
   }
 
-  const subscription =
-    typeof checkoutSession.subscription === "object" &&
-    checkoutSession.subscription?.object === "subscription"
-      ? checkoutSession.subscription
-      : await stripe.subscriptions.retrieve(subscriptionId);
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
 
   if (stripeObjectId(subscription.customer) !== customerId) {
     throw new Error("The Checkout Session subscription has another customer.");
   }
 
-  await persistSubscription(subscription, user.id, eventCreatedAt);
+  await persistSubscription(
+    subscription,
+    user.id,
+    eventCreatedAt,
+    starterPriceId,
+  );
 }
 
 async function processSubscriptionEvent(
   subscription: Stripe.Subscription,
   eventCreatedAt: Date,
+  stripe: Stripe,
+  starterPriceId: string,
 ) {
-  const customerId = stripeObjectId(subscription.customer);
+  // Stripe delivery is unordered and event timestamps have one-second
+  // precision. Reconcile from the current API object so a delayed or
+  // same-second event cannot replay stale subscription state.
+  const currentSubscription = await stripe.subscriptions.retrieve(
+    subscription.id,
+  );
+  const customerId = stripeObjectId(currentSubscription.customer);
 
   if (!customerId) {
     throw new Error("The Stripe subscription has no customer.");
   }
 
-  const owner = await subscriptionOwner(subscription, customerId);
-  await persistSubscription(subscription, owner.id, eventCreatedAt);
+  const owner = await subscriptionOwner(currentSubscription, customerId);
+  await persistSubscription(
+    currentSubscription,
+    owner.id,
+    eventCreatedAt,
+    starterPriceId,
+  );
 }
 
-async function processEvent(event: Stripe.Event, stripe: Stripe) {
+async function processEvent(
+  event: Stripe.Event,
+  stripe: Stripe,
+  starterPriceId: string,
+) {
   const eventCreatedAt = stripeTimestamp(event.created);
 
   if (event.type === "checkout.session.completed") {
@@ -277,6 +303,7 @@ async function processEvent(event: Stripe.Event, stripe: Stripe) {
       event.data.object as Stripe.Checkout.Session,
       eventCreatedAt,
       stripe,
+      starterPriceId,
     );
     return;
   }
@@ -285,6 +312,8 @@ async function processEvent(event: Stripe.Event, stripe: Stripe) {
     await processSubscriptionEvent(
       event.data.object as Stripe.Subscription,
       eventCreatedAt,
+      stripe,
+      starterPriceId,
     );
   }
 }
@@ -297,8 +326,9 @@ export async function POST(request: Request) {
   }
 
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
+  const starterPriceId = process.env.STRIPE_STARTER_PRICE_ID?.trim();
 
-  if (!webhookSecret) {
+  if (!webhookSecret || !starterPriceId) {
     return json({ error: "Stripe webhooks are not configured." }, 503);
   }
 
@@ -358,7 +388,7 @@ export async function POST(request: Request) {
       return json({ received: true, handled: true, duplicate: true });
     }
 
-    await processEvent(event, stripe);
+    await processEvent(event, stripe, starterPriceId);
     await getDb()
       .update(stripeWebhookEvents)
       .set({ processedAt: new Date() })

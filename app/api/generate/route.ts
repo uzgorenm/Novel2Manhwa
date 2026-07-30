@@ -20,10 +20,10 @@ import { getDb } from "@/lib/db";
 import {
   DEFAULT_GEMINI_IMAGE_MODEL,
   DEFAULT_GEMINI_TEXT_MODEL,
-  DEMO_PREVIEW_PATH,
   generatePanelImages,
   generateStoryboard,
   parseProjectInput,
+  prepareReferencePanel,
 } from "@/lib/storyboard";
 
 export const runtime = "nodejs";
@@ -72,6 +72,20 @@ export async function POST(request: Request) {
     process.env.GEMINI_IMAGE_MODEL?.trim() || DEFAULT_GEMINI_IMAGE_MODEL;
   const liveImageGenerationEnabled =
     process.env.ENABLE_LIVE_IMAGE_GENERATION === "true";
+  const geminiApiKey = process.env.GEMINI_API_KEY?.trim();
+  const starterPriceId = process.env.STRIPE_STARTER_PRICE_ID?.trim();
+
+  if (!liveImageGenerationEnabled || !geminiApiKey) {
+    return json(
+      { error: "Chapter generation is temporarily unavailable." },
+      503,
+    );
+  }
+  if (!starterPriceId) {
+    return json({ error: "Billing is temporarily unavailable." }, 503);
+  }
+
+  let referencePanel = parsed.value.referencePanel;
 
   let db: ReturnType<typeof getDb> | undefined;
   let projectId: string | undefined;
@@ -99,10 +113,7 @@ export async function POST(request: Request) {
 
     if (existingJob) {
       return json(
-        {
-          error: "This generation request was already submitted.",
-          job: existingJob,
-        },
+        { error: "This generation request was already submitted." },
         409,
       );
     }
@@ -141,6 +152,7 @@ export async function POST(request: Request) {
       .where(
         and(
           eq(subscriptions.userId, ownerId),
+          eq(subscriptions.stripePriceId, starterPriceId),
           inArray(
             subscriptions.status,
             ENTITLED_SUBSCRIPTION_STATUSES,
@@ -169,6 +181,20 @@ export async function POST(request: Request) {
       );
     }
 
+    if (referencePanel) {
+      try {
+        referencePanel = await prepareReferencePanel(referencePanel);
+      } catch {
+        return json(
+          {
+            error:
+              "The reference panel could not be decoded. Choose a valid JPEG, PNG, or WebP image.",
+          },
+          400,
+        );
+      }
+    }
+
     const [reservation] = await db
       .update(subscriptions)
       .set({
@@ -178,6 +204,7 @@ export async function POST(request: Request) {
       .where(
         and(
           eq(subscriptions.id, eligibleSubscription.id),
+          eq(subscriptions.stripePriceId, starterPriceId),
           inArray(
             subscriptions.status,
             ENTITLED_SUBSCRIPTION_STATUSES,
@@ -238,13 +265,15 @@ export async function POST(request: Request) {
     jobId = activeJobId;
 
     const storyboard = await generateStoryboard(parsed.value);
-    const previews = await generatePanelImages(storyboard.panels);
+    const previews = await generatePanelImages(
+      storyboard.panels,
+      referencePanel,
+    );
     if (
-      liveImageGenerationEnabled &&
-      previews.length > 0 &&
-      previews.every((preview) => preview.source === "demo")
+      previews.length !== storyboard.panels.length ||
+      previews.some((preview) => preview.source !== "gemini")
     ) {
-      throw new Error("Every live panel image request fell back to the demo.");
+      throw new Error("One or more panel image requests did not complete.");
     }
 
     const persistedPanels = await db
@@ -288,61 +317,31 @@ export async function POST(request: Request) {
     return json(
       {
         summary: storyboard.summary,
-        project: {
-          id: activeProjectId,
-          title: parsed.value.title,
-          chapterTitle: parsed.value.chapterTitle,
-          stylePreset: parsed.value.stylePreset,
-          status: "generated",
-        },
-        job: {
-          id: activeJobId,
-          status: "completed",
-          source: storyboard.source,
-          textModel: storyboard.model,
-          imageModel:
-            previews.find((preview) => preview.source === "gemini")
-              ?.model ?? null,
-        },
         panels: persistedPanels.map((panel, index) => ({
-          ...panel,
+          sequence: panel.sequence,
+          narration: panel.narration,
+          dialogue: panel.dialogue,
+          balloonType: panel.balloonType,
           imageUrl:
             previews[index]?.source === "gemini"
               ? previews[index].url
               : null,
-          imageSource: previews[index]?.source ?? "demo",
           letteringMode:
             previews[index]?.source === "gemini" ? "embedded" : "overlay",
         })),
-        preview: {
-          generatedPanelCount: previews.filter(
-            (preview) => preview.source === "gemini",
-          ).length,
-          source:
-            previews.some((preview) => preview.source === "gemini")
-              ? "gemini"
-              : "demo",
-          persisted: false,
-        },
         entitlement: {
           creditsRemaining,
         },
-        paths: {
-          projectsApi: "/api/projects",
-          generationApi: "/api/generate",
-          fallbackPreview: DEMO_PREVIEW_PATH,
-        },
-        assumptions: [
-          "Auth0 user.sub is the stable project ownership key.",
-          "Live image data URLs are response-scoped and are not persisted until object storage is provisioned.",
-          "The PostgreSQL schema must be applied to Neon before these routes receive production traffic.",
-        ],
       },
       201,
     );
   } catch (error) {
     await markGenerationFailed(db, projectId, jobId);
-    await refundChapterCredit(db, reservedSubscriptionId);
+    await refundChapterCredit(
+      db,
+      reservedSubscriptionId,
+      starterPriceId,
+    );
     if (isUniqueViolation(error)) {
       return json(
         { error: "This generation request was already submitted." },
@@ -446,6 +445,7 @@ async function markGenerationFailed(
 async function refundChapterCredit(
   db: ReturnType<typeof getDb> | undefined,
   subscriptionId: string | undefined,
+  starterPriceId: string,
 ) {
   if (!db || !subscriptionId) {
     return;
@@ -461,6 +461,7 @@ async function refundChapterCredit(
       .where(
         and(
           eq(subscriptions.id, subscriptionId),
+          eq(subscriptions.stripePriceId, starterPriceId),
           inArray(
             subscriptions.status,
             ENTITLED_SUBSCRIPTION_STATUSES,

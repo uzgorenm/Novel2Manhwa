@@ -71,8 +71,8 @@ URLs, or Auth0 client secrets.
 
 ```json
 {
-  "title": "The Moon’s Exiled Heir",
-  "chapterTitle": "Chapter 12 · The Drowned Bell",
+  "title": "The Moonlit Archive",
+  "chapterTitle": "Chapter 1 · The First Bell",
   "manuscript": "Chapter prose…",
   "stylePreset": "Cinematic webtoon"
 }
@@ -84,10 +84,15 @@ credit if generation fails before completion.
 
 The text model is required to return a strict storyboard schema. The prompt uses
 high-level vertical-comic craft principles—clear top-to-bottom reading order,
-establish/detail/reaction pacing, consistent character continuity, intentional
-negative space, and balloons that do not cover faces or focal action. It
-explicitly requires original characters and forbids imitating artists,
-franchises, or existing series.
+asymmetric setup/detail/breath/reveal pacing, consistent character continuity,
+intentional negative space, and balloons that do not cover faces or focal
+action. It forbids imitating artists and unrelated series.
+
+Creators may attach one optional JPEG, PNG, or WebP continuity panel. The
+browser compresses it before upload, the server validates and normalizes it,
+and Gemini uses it to carry forward recurring character, costume, palette, and
+rendering cues. New panels must use different poses, compositions, backgrounds,
+and lettering from the reference.
 
 If the text provider is unavailable, PanelForge returns a deterministic
 four-beat storyboard. Live image generation is disabled by default:
@@ -146,7 +151,7 @@ npm run db:push      # Apply schema changes to Neon
 ## API routes
 
 - `GET /api/health` — terse, credential-safe readiness status
-- `GET|POST /api/projects` — list or create the signed-in user’s projects
+- `GET /api/projects` — list the signed-in user’s generation history
 - `POST /api/generate` — generate and persist a storyboard
 - `POST /api/checkout` — create a Stripe subscription Checkout Session
 - `POST /api/billing-portal` — open the Stripe Customer Portal

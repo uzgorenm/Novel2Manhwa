@@ -22,6 +22,7 @@ type GeneratedPanel = {
   balloonType?: string;
   imageUrl?: string | null;
   imageSource?: string;
+  letteringMode?: "embedded" | "overlay";
 };
 
 const SAMPLE_MANUSCRIPT = `The lake had been silent for three hundred years.
@@ -250,6 +251,7 @@ export function StudioShell({
   const liveGeneratedPanels = generatedPanels.filter(
     (panel) =>
       panel.imageSource === "gemini" &&
+      panel.letteringMode === "embedded" &&
       panel.imageUrl?.startsWith("data:image/"),
   );
 
@@ -598,10 +600,17 @@ export function StudioShell({
                 >
                   {liveGeneratedPanels.length > 0 ? (
                     liveGeneratedPanels.map((panel, index) => {
-                      const panelCopy = bubbleCopy(
-                        panel.dialogue || panel.narration,
-                        `Panel ${index + 1}`,
-                      );
+                      const accessiblePanelText = [
+                        `Panel ${index + 1}.`,
+                        panel.narration?.trim()
+                          ? `Narration: ${panel.narration.trim()}`
+                          : null,
+                        panel.dialogue?.trim()
+                          ? `Dialogue: ${panel.dialogue.trim()}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" ");
                       return (
                         <div
                           className="generated-panel"
@@ -614,15 +623,9 @@ export function StudioShell({
                             height={1536}
                             unoptimized
                           />
-                          <div
-                            className={`speech-bubble generated-panel-bubble ${
-                              index % 2 === 0
-                                ? "generated-bubble-right"
-                                : "generated-bubble-left"
-                            }`}
-                          >
-                            {panelCopy}
-                          </div>
+                          <span className="visually-hidden">
+                            {accessiblePanelText}
+                          </span>
                         </div>
                       );
                     })
@@ -646,14 +649,17 @@ export function StudioShell({
                   )}
                   <figcaption>
                     {liveGeneratedPanels.length > 0
-                      ? `${liveGeneratedPanels.length} generated panels with editable dialogue overlays`
+                      ? `${liveGeneratedPanels.length} generated panels with image-rendered speech balloons and lettering`
                       : "AI storyboard preview with editable dialogue overlays"}
                   </figcaption>
                 </figure>
               </div>
               <div className="preview-footer">
                 <span>
-                  <i aria-hidden="true">A</i> Dialogue remains editable
+                  <i aria-hidden="true">A</i>{" "}
+                  {liveGeneratedPanels.length > 0
+                    ? "Lettering rendered into the artwork"
+                    : "Dialogue remains editable"}
                 </span>
                 <button type="button">Open editor <span aria-hidden="true">↗</span></button>
               </div>

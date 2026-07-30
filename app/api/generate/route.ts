@@ -311,6 +311,8 @@ export async function POST(request: Request) {
               ? previews[index].url
               : null,
           imageSource: previews[index]?.source ?? "demo",
+          letteringMode:
+            previews[index]?.source === "gemini" ? "embedded" : "overlay",
         })),
         preview: {
           generatedPanelCount: previews.filter(

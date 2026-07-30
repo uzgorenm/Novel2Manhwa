@@ -108,6 +108,12 @@ defaults are `gemini-3.6-flash` for structured storyboards and
 `gemini-3.1-flash-image` for 2:3 panel artwork; override them with
 `GEMINI_TEXT_MODEL` and `GEMINI_IMAGE_MODEL`.
 
+Gemini renders text-free artwork with intentional negative space. The server
+then composites exact dialogue, narration, thoughts, and sound effects into
+each successful panel JPEG with Sharp. This keeps spelling deterministic,
+avoids duplicate browser overlays, and preserves the 450 KiB per-panel response
+budget.
+
 ## Billing
 
 The included Stripe test-mode product is a monthly Starter subscription with

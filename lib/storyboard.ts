@@ -1,6 +1,7 @@
 import "server-only";
 
 import { GoogleGenAI } from "@google/genai";
+import { embedPanelLettering } from "@/lib/panel-lettering";
 
 export const DEMO_PREVIEW_PATH = "/demo-chapter-strip.png";
 export const DEFAULT_GEMINI_TEXT_MODEL = "gemini-3.6-flash";
@@ -240,7 +241,12 @@ async function requestGeminiPreviewImage(
       throw new Error("Image provider request did not complete.");
     }
     const dataUrl = decodeImageDataUrl(response.output_image);
-    return { url: dataUrl, source: "gemini", model };
+    const letteredDataUrl = await embedPanelLettering(
+      dataUrl,
+      panel,
+      MAX_IMAGE_BYTES,
+    );
+    return { url: letteredDataUrl, source: "gemini", model };
   } catch {
     return DEMO_PREVIEW_IMAGE;
   }
@@ -458,7 +464,7 @@ function decodeImageDataUrl(
 
 function buildPreviewPrompt(panel: StoryboardPanel): string {
   return safeImagePrompt(
-    `${panel.imagePrompt}. ${panel.shot}. Create one finished 2:3 vertical comic panel. Do not render words, letters, captions, sound effects, or speech balloons. Preserve clean high-contrast negative space at ${panel.balloonPlacement} for a professionally typeset HTML balloon overlay.`,
+    `${panel.imagePrompt}. ${panel.shot}. Create one finished 2:3 vertical comic panel. Do not render words, letters, captions, sound effects, or speech balloons. Preserve clean high-contrast negative space at ${panel.balloonPlacement} for a deterministic post-production lettering and balloon layer.`,
   );
 }
 

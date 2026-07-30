@@ -1216,30 +1216,6 @@ label[for]:focus-within {
   border-radius: 0;
 }
 
-.generated-panel-bubble {
-  top: 5%;
-}
-
-.generated-bubble-right {
-  right: 5%;
-}
-
-.generated-bubble-left {
-  left: 5%;
-}
-
-.generated-bubble-right::after {
-  right: 20%;
-  bottom: -8px;
-  transform: rotate(34deg) skew(-10deg);
-}
-
-.generated-bubble-left::after {
-  left: 20%;
-  bottom: -8px;
-  transform: rotate(52deg) skew(-10deg);
-}
-
 .storyboard-strip figcaption {
   position: absolute;
   z-index: 4;

@@ -100,6 +100,10 @@
           "envKey": "ENABLE_LIVE_IMAGE_GENERATION"
         },
         {
+          "variableName": "stripe-creator-price",
+          "envKey": "STRIPE_CREATOR_PRICE_ID"
+        },
+        {
           "variableName": "stripe-portal-configuration",
           "envKey": "STRIPE_PORTAL_CONFIGURATION_ID"
         },
@@ -150,6 +154,10 @@
     "openrouter-text-model": {
       "name": "openrouter-text-model",
       "backendId": "fprjvar_61V8OVBCbqR95UjPz16V8O9V7fSQtUaeml4Xbu9iSSzQ"
+    },
+    "stripe-creator-price": {
+      "name": "stripe-creator-price",
+      "backendId": "fprjvar_61V8RgVGnM6XGPfLz16V8O9V7fSQtUaeml4Xbu9iS32e"
     },
     "stripe-portal-configuration": {
       "name": "stripe-portal-configuration",

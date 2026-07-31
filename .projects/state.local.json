@@ -1,0 +1,174 @@
+{
+  "version": 1,
+  "project": {
+    "initializedAt": "2026-07-30T20:05:16.428Z",
+    "merchantDisplayName": "Auth0StripeHackathon",
+    "merchantId": "acct_1Tz0C9LiwtATatOd",
+    "projectId": "project_61V8OA0wpe7MWBSuL16V8O9V7fSQtUaeml4Xbu9iSLHc",
+    "projectName": "Novel2Manhwa"
+  },
+  "providers": {
+    "auth0": {
+      "accountRequestId": "facctrq_61V8OAZhtYwcwpytq16V8O9V7fSQtUaeml4Xbu9iSDs8",
+      "configuration": {
+        "locality": "us",
+        "naming_prefix": "panelforge"
+      },
+      "linkedAt": "2026-07-30T20:05:57.294Z",
+      "providerId": "prvdr_61UVctyxfLOj4FpVw5Bmi",
+      "providerName": "Auth0",
+      "redirectUrl": null,
+      "requestedAt": "2026-07-30T20:05:57.294Z",
+      "status": "complete"
+    },
+    "neon": {
+      "accountRequestId": "facctrq_61V8OIHhBAUuLOlbv16V8O9V7fSQtUaeml4Xbu9iSLSS",
+      "configuration": {},
+      "linkedAt": "2026-07-30T20:13:52.408Z",
+      "providerId": "prvdr_61UH8uNXFdoJUJOtT54AC",
+      "providerName": "Neon",
+      "redirectUrl": null,
+      "requestedAt": "2026-07-30T20:13:52.408Z",
+      "status": "complete"
+    },
+    "openrouter": {
+      "accountRequestId": "facctrq_61V8ONY6sX0h7sp7k16V8O9V7fSQtUaeml4Xbu9iS9pI",
+      "configuration": {},
+      "linkedAt": "2026-07-30T20:19:19.199Z",
+      "providerId": "prvdr_61URImmFACEuDHEx651IO",
+      "providerName": "OpenRouter",
+      "redirectUrl": null,
+      "requestedAt": "2026-07-30T20:19:19.198Z",
+      "status": "complete"
+    },
+    "vercel": {
+      "accountRequestId": "facctrq_61V8S3r6rLiEZXT4916V8O9V7fSQtUaeml4Xbu9iSQbA",
+      "configuration": {},
+      "linkedAt": "2026-07-31T00:15:12.519Z",
+      "providerId": "prvdr_61ULUAr4zlQgZkvXY5LsG",
+      "providerName": "Vercel",
+      "redirectUrl": null,
+      "requestedAt": "2026-07-31T00:15:12.519Z",
+      "status": "complete"
+    }
+  },
+  "resources": {
+    "auth0": {
+      "configuration": {
+        "name": "kitaplar",
+        "description": "Read vertical-comic previews and adapt manuscripts into illustrated, scroll-ready chapters.",
+        "app_type": "regular_web",
+        "callbacks": [
+          "http://localhost:3000/auth/callback",
+          "https://kitaplar-app.vercel.app/auth/callback"
+        ],
+        "allowed_logout_urls": [
+          "http://localhost:3000",
+          "https://kitaplar-app.vercel.app"
+        ],
+        "web_origins": [
+          "http://localhost:3000",
+          "https://kitaplar-app.vercel.app"
+        ],
+        "oidc_conformant": true,
+        "is_first_party": true,
+        "token_endpoint_auth_method": "client_secret_post",
+        "grant_types": [
+          "authorization_code",
+          "refresh_token"
+        ]
+      },
+      "createdAt": "2026-07-30T20:06:11.667Z",
+      "lastRevealedAt": "2026-07-31T00:13:14.287Z",
+      "lastStatus": "complete",
+      "name": "auth0",
+      "providerId": "prvdr_61UVctyxfLOj4FpVw5Bmi",
+      "providerName": "Auth0",
+      "resourceId": "fres_61V8OAp4qhvps0yXB16V8O9V7fSQtUaeml4Xbu9iS2yG",
+      "serviceId": "client"
+    },
+    "auth0-plan": {
+      "configuration": {},
+      "createdAt": "2026-07-30T20:06:00.797Z",
+      "lastRevealedAt": "2026-07-30T20:06:00.923Z",
+      "lastStatus": "complete",
+      "name": "auth0-plan",
+      "providerId": "prvdr_61UVctyxfLOj4FpVw5Bmi",
+      "providerName": "Auth0",
+      "resourceId": "fres_61V8OAfuIz7UTFsgg16V8O9V7fSQtUaeml4Xbu9iSUIi",
+      "serviceId": "free"
+    },
+    "database": {
+      "configuration": {},
+      "createdAt": "2026-07-30T20:14:01.255Z",
+      "lastRevealedAt": "2026-07-30T20:14:01.428Z",
+      "lastStatus": "complete",
+      "name": "database",
+      "providerId": "prvdr_61UH8uNXFdoJUJOtT54AC",
+      "providerName": "Neon",
+      "resourceId": "fres_61V8OIR91k9df5iAO16V8O9V7fSQtUaeml4Xbu9iSPEe",
+      "serviceId": "postgres"
+    },
+    "hosting": {
+      "configuration": {
+        "name": "panelforge"
+      },
+      "createdAt": "2026-07-30T20:13:41.398Z",
+      "lastRevealedAt": "2026-07-30T22:48:04.873Z",
+      "lastStatus": "complete",
+      "name": "hosting",
+      "providerId": "prvdr_61ULUAr4zlQgZkvXY5LsG",
+      "providerName": "Vercel",
+      "resourceId": "fres_61V8OI7JX4ommq8qn16V8O9V7fSQtUaeml4Xbu9iS6fQ",
+      "serviceId": "project"
+    },
+    "neon-plan": {
+      "configuration": {},
+      "createdAt": "2026-07-30T20:13:53.651Z",
+      "lastRevealedAt": "2026-07-30T20:13:53.816Z",
+      "lastStatus": "complete",
+      "name": "neon-plan",
+      "providerId": "prvdr_61UH8uNXFdoJUJOtT54AC",
+      "providerName": "Neon",
+      "resourceId": "fres_61V8OIKWQ9bigTOMi16V8O9V7fSQtUaeml4Xbu9iSOoy",
+      "serviceId": "free"
+    },
+    "openrouter-plan": {
+      "configuration": {},
+      "createdAt": "2026-07-30T20:19:20.640Z",
+      "lastRevealedAt": "2026-07-30T20:19:20.844Z",
+      "lastStatus": "complete",
+      "name": "openrouter-plan",
+      "providerId": "prvdr_61URImmFACEuDHEx651IO",
+      "providerName": "OpenRouter",
+      "resourceId": "fres_61V8ONbZLyrqqO5q516V8O9V7fSQtUaeml4Xbu9iSSz2",
+      "serviceId": "free"
+    },
+    "vercel-plan": {
+      "configuration": {},
+      "createdAt": "2026-07-30T20:13:35.170Z",
+      "lastRevealedAt": "2026-07-30T20:13:35.332Z",
+      "lastStatus": "complete",
+      "name": "vercel-plan",
+      "providerId": "prvdr_61ULUAr4zlQgZkvXY5LsG",
+      "providerName": "Vercel",
+      "resourceId": "fres_61V8OI2rCPZVdjslc16V8O9V7fSQtUaeml4Xbu9iSTAO",
+      "serviceId": "hobby"
+    }
+  },
+  "managedProjectVariableEnvKeys": {
+    ".env": [
+      "APP_BASE_URL",
+      "AUTH0_SECRET",
+      "ENABLE_LIVE_IMAGE_GENERATION",
+      "GEMINI_API_KEY",
+      "GEMINI_IMAGE_MODEL",
+      "GEMINI_TEXT_MODEL",
+      "STRIPE_CREATOR_PRICE_ID",
+      "STRIPE_PORTAL_CONFIGURATION_ID",
+      "STRIPE_SECRET_KEY",
+      "STRIPE_STARTER_PRICE_ID",
+      "STRIPE_WEBHOOK_SECRET"
+    ]
+  }
+}

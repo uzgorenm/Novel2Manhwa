@@ -42,13 +42,13 @@
       "status": "complete"
     },
     "vercel": {
-      "accountRequestId": "facctrq_61V8S3r6rLiEZXT4916V8O9V7fSQtUaeml4Xbu9iSQbA",
+      "accountRequestId": "facctrq_61V8S8IUXY2R5kyBO16V8O9V7fSQtUaeml4Xbu9iSP1M",
       "configuration": {},
-      "linkedAt": "2026-07-31T00:15:12.519Z",
+      "linkedAt": "2026-07-31T00:19:47.958Z",
       "providerId": "prvdr_61ULUAr4zlQgZkvXY5LsG",
       "providerName": "Vercel",
       "redirectUrl": null,
-      "requestedAt": "2026-07-31T00:15:12.519Z",
+      "requestedAt": "2026-07-31T00:19:47.958Z",
       "status": "complete"
     }
   },
@@ -108,19 +108,6 @@
       "providerName": "Neon",
       "resourceId": "fres_61V8OIR91k9df5iAO16V8O9V7fSQtUaeml4Xbu9iSPEe",
       "serviceId": "postgres"
-    },
-    "hosting": {
-      "configuration": {
-        "name": "panelforge"
-      },
-      "createdAt": "2026-07-30T20:13:41.398Z",
-      "lastRevealedAt": "2026-07-30T22:48:04.873Z",
-      "lastStatus": "complete",
-      "name": "hosting",
-      "providerId": "prvdr_61ULUAr4zlQgZkvXY5LsG",
-      "providerName": "Vercel",
-      "resourceId": "fres_61V8OI7JX4ommq8qn16V8O9V7fSQtUaeml4Xbu9iS6fQ",
-      "serviceId": "project"
     },
     "neon-plan": {
       "configuration": {},

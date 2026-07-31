@@ -109,6 +109,19 @@
       "resourceId": "fres_61V8OIR91k9df5iAO16V8O9V7fSQtUaeml4Xbu9iSPEe",
       "serviceId": "postgres"
     },
+    "hosting": {
+      "configuration": {
+        "name": "kitaplar-app"
+      },
+      "createdAt": "2026-07-31T00:20:50.343Z",
+      "lastRevealedAt": "2026-07-31T00:20:50.582Z",
+      "lastStatus": "complete",
+      "name": "hosting",
+      "providerId": "prvdr_61ULUAr4zlQgZkvXY5LsG",
+      "providerName": "Vercel",
+      "resourceId": "fres_61V8S9JpaVRibA2xi16V8O9V7fSQtUaeml4Xbu9iSKlc",
+      "serviceId": "project"
+    },
     "neon-plan": {
       "configuration": {},
       "createdAt": "2026-07-30T20:13:53.651Z",

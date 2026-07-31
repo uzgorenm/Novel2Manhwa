@@ -30,6 +30,11 @@
       "providerName": "Neon",
       "serviceId": "postgres"
     },
+    "hosting": {
+      "name": "hosting",
+      "providerName": "Vercel",
+      "serviceId": "project"
+    },
     "neon-plan": {
       "name": "neon-plan",
       "providerName": "Neon",
@@ -58,6 +63,9 @@
         },
         {
           "resourceName": "database"
+        },
+        {
+          "resourceName": "hosting"
         },
         {
           "resourceName": "neon-plan"

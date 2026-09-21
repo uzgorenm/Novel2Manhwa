@@ -9,9 +9,11 @@ import {
 } from "@/db/schema";
 import { getDb } from "@/lib/db";
 import { getStripe, StripeConfigurationError } from "@/lib/stripe";
+import {
+  CHAPTER_CREDITS_PER_PERIOD,
+  isEntitledSubscriptionStatus,
+} from "@/lib/subscription-entitlement";
 
-const CHAPTER_CREDITS_PER_PERIOD = 6;
-const ENTITLED_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
 const HANDLED_EVENT_TYPES = new Set([
   "checkout.session.completed",
   "customer.subscription.created",
@@ -87,7 +89,7 @@ async function persistSubscription(
   const currentPeriodEnd = stripeTimestamp(periodItem.current_period_end);
   const entitled =
     Boolean(starterItem) &&
-    ENTITLED_SUBSCRIPTION_STATUSES.has(subscription.status);
+    isEntitledSubscriptionStatus(subscription.status);
   const credits = entitled ? CHAPTER_CREDITS_PER_PERIOD : 0;
   const now = new Date();
 

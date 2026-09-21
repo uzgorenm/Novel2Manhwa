@@ -25,6 +25,10 @@ import {
   parseProjectInput,
   prepareReferencePanel,
 } from "@/lib/storyboard";
+import {
+  CHAPTER_CREDITS_PER_PERIOD,
+  ENTITLED_SUBSCRIPTION_STATUSES,
+} from "@/lib/subscription-entitlement";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,9 +39,7 @@ type AuthenticatedUser = {
   displayName: string | null;
 };
 
-const ENTITLED_SUBSCRIPTION_STATUSES = ["active", "trialing"] as const;
 const GENERATION_CONCURRENCY_WINDOW_MS = 5 * 60 * 1_000;
-const MAX_CHAPTER_CREDITS = 6;
 
 export async function POST(request: Request) {
   const identity = await getAuthenticatedUser();
@@ -455,7 +457,7 @@ async function refundChapterCredit(
     await db
       .update(subscriptions)
       .set({
-        chapterCreditsRemaining: sql`least(${subscriptions.chapterCreditsRemaining} + 1, ${MAX_CHAPTER_CREDITS})`,
+        chapterCreditsRemaining: sql`least(${subscriptions.chapterCreditsRemaining} + 1, ${CHAPTER_CREDITS_PER_PERIOD})`,
         updatedAt: new Date(),
       })
       .where(

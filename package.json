@@ -9,7 +9,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "npm run lint && npm run build",
+    "test": "npm run test:entitlement && npm run lint && npm run build",
+    "test:entitlement": "node --experimental-strip-types --test lib/subscription-entitlement.test.mjs",
     "lint": "eslint . --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push"

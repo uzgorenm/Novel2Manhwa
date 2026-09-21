@@ -7,13 +7,10 @@ import { subscriptions, users } from "@/db/schema";
 import { auth0 } from "@/lib/auth0";
 import { getDb } from "@/lib/db";
 import { getStripe, StripeConfigurationError } from "@/lib/stripe";
+import { hasNonTerminalSubscription } from "@/lib/subscription-entitlement";
 
 const CHECKOUT_INTEGRATION_IDENTIFIER = "panelforge_checkout_qmztrvka";
 const CHECKOUT_IDEMPOTENCY_WINDOW_MS = 10 * 60 * 1_000;
-const TERMINAL_SUBSCRIPTION_STATUSES = new Set([
-  "canceled",
-  "incomplete_expired",
-]);
 
 function json(body: Record<string, unknown>, status = 200) {
   return NextResponse.json(body, {
@@ -24,12 +21,6 @@ function json(body: Record<string, unknown>, status = 200) {
 
 function digest(value: string) {
   return createHash("sha256").update(value).digest("hex");
-}
-
-function hasNonTerminalSubscription(statuses: readonly string[]) {
-  return statuses.some(
-    (status) => !TERMINAL_SUBSCRIPTION_STATUSES.has(status),
-  );
 }
 
 function appOrigin(request: Request) {
